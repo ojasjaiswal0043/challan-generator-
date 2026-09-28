@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EPF ECR Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--tx:#1c1c1a;--mut:#6b6b66;--bd:#dcdcd6;--ac:#1f6feb;--warn:#b45309;--wbg:#fef3c7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--card:#222220;--tx:#ececE8;--mut:#9a9a94;--bd:#3a3a36;--ac:#58a6ff;--warn:#fbbf24;--wbg:#3a2f0b}}
+:root[data-theme="dark"]{--bg:#161615;--card:#222220;--tx:#ececE8;--mut:#9a9a94;--bd:#3a3a36;--ac:#58a6ff;--warn:#fbbf24;--wbg:#3a2f0b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 14px 40px}h1{font-size:22px;margin:0 0 4px}p.s{color:var(--mut);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:4px}
+select,input[type=file],input[type=text]{width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:620px){.row{grid-template-columns:1fr}}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer;margin:4px 8px 0 0}button:disabled{opacity:.4;cursor:default}
+.warn{background:var(--wbg);color:var(--warn);border-radius:8px;padding:10px;margin-bottom:12px;font-size:14px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:right}th{color:var(--mut);font-weight:600;position:sticky;top:0;background:var(--card)}
+td:nth-child(1),td:nth-child(2),th:nth-child(1),th:nth-child(2){text-align:left}td input[type=number]{width:56px;padding:3px;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:5px}
+tfoot td{font-weight:700}#msg{color:var(--mut);font-size:13px;margin-top:8px}
+</style></head><body><main>
+<h1>EPF ECR Generator</h1>
+<p class="s">Upload a sheet with columns <b>UAN, Name, Salary</b>. Everything runs in your browser; nothing is uploaded.</p>
+<div class="card"><div class="row">
+<div><label for="f">Salary sheet (.xlsx / .csv)</label><input id="f" type="file" accept=".xlsx,.xls,.csv"></div>
+<div><label for="m">Salary above ₹15,000</label><select id="m"><option value="std">Standard: cap only EPS &amp; EDLI wages at 15,000</option><option value="full">Cap Gross, EPF, EPS &amp; EDLI all at 15,000</option></select></div>
+</div></div>
+<div id="out" hidden>
+<div id="w"></div>
+<div class="card"><div class="tw"><table><thead><tr><th>UAN</th><th>Name</th><th>Gross</th><th>EPF</th><th>EPS</th><th>EDLI</th><th>EE PF</th><th>ER EPS</th><th>ER PF</th><th>NCP</th><th>Age 58+</th></tr></thead><tbody id="b"></tbody><tfoot id="t"></tfoot></table></div>
+<div id="msg">Tick <b>Age 58+</b> for members over 58 who haven't opted for deferred pension (EPFO rejects EPS wages/contribution for them; EPS is set to 0 and the full 12% goes to ER PF). Set NCP days for part-month members.</div></div>
+<div class="card"><label for="fn">File name (without extension)</label><input id="fn" type="text" value="" placeholder="e.g. ECR_JULY_2026"></div>
+<button id="dt" disabled>Download TXT</button><button id="dx" disabled>Download Excel</button><div id="st" class="s"></div>
+</div>
+<script>
+var rows=[],dl=null;
+var $=function(i){return document.getElementById(i)};
+var rd=function(x){return Math.floor(x+0.5+1e-9)};
+function calc(r){var s=r.sal,full=$('m').value==='full',cap=Math.min(s,15000);
+var g=full?cap:s,e=full?cap:s,eps=r.old?0:cap,ed=cap;
+var ee=rd(e*0.12),ep=r.old?0:rd(eps*0.0833);
+return[r.uan,r.name,g,e,eps,ed,ee,ep,ee-ep,r.ncp,0]}
+function render(){var out=[],tot=[0,0,0,0,0,0,0,0],h='';
+rows.forEach(function(r,i){var c=calc(r);out.push(c);
+[2,3,4,5,6,7,8].forEach(function(k,j){tot[j]+=c[k]});
+h+='<tr><td>'+c[0]+'</td><td></td>'+c.slice(2,9).map(function(v){return'<td>'+v+'</td>'}).join('')+
+'<td><input type="number" min="0" max="31" value="'+r.ncp+'" data-i="'+i+'" data-k="ncp"></td>'+
+'<td><input type="checkbox" '+(r.old?'checked':'')+' data-i="'+i+'" data-k="old"></td></tr>'});
+$('b').innerHTML=h;
+Array.prototype.forEach.call($('b').rows,function(tr,i){tr.cells[1].textContent=rows[i].name});
+$('t').innerHTML='<tr><td>Total ('+rows.length+')</td><td></td>'+tot.map(function(v){return'<td>'+v+'</td>'}).join('')+'<td></td><td></td></tr>';
+window._out=out}
+$('b').addEventListener('input',function(e){var t=e.target,i=+t.dataset.i;if(t.dataset.k==='ncp')rows[i].ncp=Math.max(0,parseInt(t.value)||0);else rows[i].old=t.checked;
+var pos=t.dataset.k,f=t;render();var n=$('b').querySelector('[data-i="'+i+'"][data-k="'+pos+'"]');if(n&&pos==='ncp')n.focus()});
+$('m').addEventListener('change',function(){if(rows.length)render()});
+$('f').addEventListener('change',function(e){var file=e.target.files[0];if(!file)return;
+var rr=new FileReader();rr.onload=function(){try{
+var wb=XLSX.read(rr.result,{type:'array'}),a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+rows=[];a.forEach(function(x){if(!x||x[0]==null||x[1]==null||x[2]==null)return;
+var s=Number(String(x[2]).replace(/,/g,''));if(!isFinite(s))return;
+rows.push({uan:String(x[0]).trim(),name:String(x[1]).trim().toUpperCase(),sal:Math.round(s),ncp:0,old:false})});
+if(!rows.length){$('out').hidden=true;alert('No valid rows found. Expected columns: UAN, Name, Salary.');return}
+var ss=rows.map(function(r){return r.sal}).sort(function(p,q){return p-q}),med=ss[Math.floor(ss.length/2)];
+var lo=rows.filter(function(r){return r.sal<med*0.5});
+var dup={},d=[];rows.forEach(function(r){if(dup[r.uan])d.push(r.uan);dup[r.uan]=1});
+var w='';if(lo.length)w+='<div class="warn">Low salary, possibly part-month (set NCP days): '+lo.map(function(r){return r.name+' ('+r.sal+')'}).join(', ')+'</div>';
+if(d.length)w+='<div class="warn">Duplicate UANs: '+d.join(', ')+'</div>';
+$('w').innerHTML=w;$('out').hidden=false;render();
+$('dt').disabled=$('dx').disabled=false
+}catch(err){alert('Could not read file: '+err.message)}};rr.readAsArrayBuffer(file)});
+function save(name,data){var type=name.slice(-4)==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'text/plain;charset=utf-8';
+var u=URL.createObjectURL(new Blob([data],{type:type})),el=document.createElement('a');el.href=u;el.download=name;document.body.appendChild(el);el.click();el.remove();
+setTimeout(function(){URL.revokeObjectURL(u)},1000);$('st').textContent='Downloaded '+name}
+function fname(ext){var n=$('fn').value.trim().replace(/\.(txt|xlsx)$/i,'').replace(/[\\\/:*?"<>|]/g,'_');return(n||'ECR_'+new Date().toISOString().slice(0,7))+'.'+ext}
+$('dt').onclick=function(){save(fname('txt'),window._out.map(function(r){return r.join('#~#')}).join('\n')+'\n')};
+$('dx').onclick=function(){var H=['UAN','Member Name','Gross Wages','EPF Wages','EPS Wages','EDLI Wages','EE PF Contribution','ER EPS Contribution','ER PF Contribution','NCP Days','Refund of Advance'];
+var ws=XLSX.utils.aoa_to_sheet([H].concat(window._out)),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'ECR');
+save(fname('xlsx'),XLSX.write(wb,{type:'array',bookType:'xlsx'}))};
+dl=true;
+</script></main></body></html>
